@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block content %}
+<form method="POST" action="{{ url_for('handle_search') }}">
+    <div class="mb-3">
+        <input type="text" class="form-control" name="query" id="query" placeholder="Enter your search query"
+            value="{{ query }}" autofocus>
+    </div>
+</form>
+{% if results %}
+<div class="row mb-3">
+    <div class="col-3">
+        <!-- <p><a href="javascript:history.back(1)">← Back</a></p> -->
+
+        <!-- Date Range Pickers -->
+        <h6>Filter by Date</h6>
+        <form method="POST" id="date_range_input">
+
+            <div class="form-group mb-1">
+                <div class="align-items-center" style="font-size: small;">
+                    <label for="from_date">From:</label>
+                    <input type="date" class="form-control" id="from_date" style="font-size: small;">
+                </div>
+            </div>
+
+            <div class="form-group mb-3">
+                <div class="align-items-center" style="font-size: small;">
+                    <label class="mr-sm-2" for="to_date">To:</label>
+                    <input type="date" class="form-control" id="to_date" style="font-size: small;">
+                </div>
+            </div>
+
+
+            <input type="hidden" id="datequery" name="query">
+
+            <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" title="Please select a valid date range!"
+                style="width: 100%;">
+                <button type='submit' id="submitButton" disabled="true" class="btn btn-primary"
+                    style="font-size: small; width: 100%;">Set Dates</button>
+            </span>
+        </form>
+        <!-- Script for date picker -->
+        <script>
+            const fromDateInput = document.getElementById('from_date');
+            const toDateInput = document.getElementById('to_date');
+            const submitButton = document.getElementById('submitButton');
+            const queryBar = document.getElementsByName('query')[0]
+            const hiddenQuery = document.getElementById('datequery')
+
+            fromDateInput.addEventListener('input', toggleButtonState);
+            toDateInput.addEventListener('input', toggleButtonState);
+            submitButton.addEventListener('click', function (event) {
+                const fromDate = fromDateInput.value;
+                const toDate = toDateInput.value;
+                var currentQueryBarVal = queryBar.value
+                // queryBar.value = `daterange:${fromDate} ${toDate} {{ query }}`;
+                hiddenQuery.value = `daterange:${fromDate} ${toDate} {{ query }}`;
+            });
+
+            function toggleButtonState() {
+                // Disable the Filter by Date button if 1. no dates selected for either from or to, 2. from date is later than to date
+                if (!fromDateInput.value || !toDateInput.value || new Date(fromDateInput.value) > new Date(toDateInput.value)) {
+                    submitButton.disabled = true;
+                } else {
+                    submitButton.disabled = false;
+                }
+            }
+        </script>
+
+        {% for agg in aggs %} <!-- This is for both subreddits and sentiments -->
+        <h6 class="mt-3" style="width: 100%;">{{ agg }}</h6>
+
+        <!-- Checkbox for sentiment -->
+        {% if agg == "Sentiment" %}
+        <form method="POST">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="positive" value="on" id="positive" onchange="this.form.submit()"
+            {{ 'checked' if sentiments.get('positive') == 'on' else '' }}>
+            <input type="hidden" name="query" value="{{ query }}">
+            <input type="hidden" name="filter" value="{{ filter }}">
+            <label class="form-check-label" for="sentiment{{ key }}">
+                positive ({{ aggs[agg].get('positive', 0) }})
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="negative" value="on" id="negative" onchange="this.form.submit()"
+            {{ 'checked' if sentiments.get('negative') == 'on' else '' }}>
+            <input type="hidden" name="query" value="{{ query }}">
+            <input type="hidden" name="filter" value="{{ filter }}">
+            <label class="form-check-label" for="sentiment{{ key }}">
+                negative ({{ aggs[agg].get('negative', 0) }})
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="neutral" value="on" id="neutral" onchange="this.form.submit()"
+            {{ 'checked' if sentiments.get('neutral') == 'on' else '' }}>
+            <input type="hidden" name="query" value="{{ query }}">
+            <input type="hidden" name="filter" value="{{ filter }}">
+            <label class="form-check-label" for="sentiment{{ key }}">
+                neutral ({{ aggs[agg].get('neutral', 0) }})
+            </label>
+        </div>
+        </form>
+
+        {% else %} <!-- Button for subreddit and intent -->
+        {% for key, count in aggs[agg].items() %}
+        <form method="POST">
+            <input type="hidden" name="query" value="{{ query }}">
+            <input type="hidden" name="filter" value="{{ agg|lower }}:{{key}} {{ filter }}">
+            {% if agg == "Intent" %}
+                {% if key == "0" %}
+                    {% set key = "Career Advice" %}
+                {% elif key == "1" %}
+                    {% set key = "Support and Encouragement" %}
+                {% elif key == "2" %}
+                    {% set key = "Sexual Identity Discussion" %}
+                {% elif key == "3" %}
+                    {% set key = "Anxiety Management Advice" %}
+                {% elif key == "4" %}
+                    {% set key = "Social Interaction Tips" %}
+                {% else %}
+                    {% set key = "Other" %}
+                {% endif %}
+            {% endif %}
+            <button type="submit" class="btn btn-link btn-sm text-left w-100" style="text-align: left; padding-left: 0;"  {% if
+                aggs[agg]|length==1 %} disabled{% endif %}>
+                {{ key }} ({{ count }})
+            </button>
+        </form>
+        
+
+        {% endfor %}
+        {% endif %}
+        <canvas id={{agg}}PieChart width="200" height="200"></canvas>
+        <!-- Script for piecharts -->
+        <script>
+            var agg = "{{agg}}"
+            var dataDict = "{{aggs}}"
+
+            dataDict = JSON.parse(dataDict.replace(/&#(\d+);/g, function (match, dec) {
+                return String.fromCharCode(dec);
+            }).replace(/'/g, '"'));
+
+            var labels = [];
+            var values = [];
+
+            for (var key in dataDict[agg]) {
+                labels.push(key)
+                values.push(dataDict[agg][key])
+            }
+
+            drawPieChart(labels, values, agg + "PieChart")
+
+            function drawPieChart(labels, values, elementID) {
+                var ctx = document.getElementById(elementID).getContext('2d');
+                var myChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.2)',
+                                'rgba(54, 162, 235, 0.2)',
+                                'rgba(255, 206, 86, 0.2)',
+                                'rgba(75, 192, 192, 0.2)',
+                                'rgba(153, 102, 255, 0.2)',
+                                'rgba(255, 159, 64, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 99, 132, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 206, 86, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(153, 102, 255, 1)',
+                                'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: {
+                                display: false,
+                            }
+                        }
+                    }
+                });
+            }
+        </script>
+        {% endfor %}
+    </div>
+
+    <!-- Display Results -->
+    <div class="col-9">
+        <div class="row mb-3">
+            <div class="col-sm-auto my-auto">
+                Showing results {{ from_ + 1 }}-{{ from_ + results|length }} out of {{ total }} ({{time_}} ms)
+            </div>
+            <div class="col"></div>
+        </div>
+        {% for result in results %}
+        <p>
+            {{ from_ + loop.index }}. <b><a href="{{ url_for('get_document', id=result._id) }}">{{
+                    result._source.post_title }}</a></b>
+
+            <br>
+        <div id="post_comment">
+            {{ result._source.post_comment }}
+        </div>
+        <br>
+        <div class="row">
+            <div class="col-sm-auto">
+                <small>Subreddit: {{ result._source.subreddit }}</small>
+            </div>
+            <div class="col-sm-auto">
+                <small>Date Created: {{ result._source.post_date }}, {{ result._source.post_time }}</small>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-auto">
+                {% if result._source.intent == "0" %}
+                    {% set intent = "Career Advice" %}
+                {% elif result._source.intent == "1" %}
+                    {% set intent = "Support and Encouragement" %}
+                {% elif result._source.intent == "2" %}
+                    {% set intent = "Sexual Identity Discussion" %}
+                {% elif intent == "3" %}
+                    {% set intent = "Anxiety Management Advice" %}
+                {% elif result._source.intent == "4" %}
+                    {% set intent = "Social Interaction Tips" %}
+                {% else %}
+                    {% set intent = "Other" %}
+                {% endif %}
+                <small>Intent: {{ intent }}</small>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-auto">
+                {% if result._source.sentiment == "positive" %}
+                <span class="badge text-bg-success">
+                    {% elif result._source.sentiment == "negative" %}
+                    <span class="badge text-bg-danger">
+                        {% else %}
+                        <span class="badge text-bg-secondary">
+                            {% endif %}
+                            Sentiment: {{ result._source.sentiment }}
+                        </span>
+            </div>
+            <div class="col-sm-auto">
+                <small>
+                    {% if result._score %}<i>(Score: {{ result._score }})</i>{% endif %}
+                </small>
+            </div>
+        </div>
+        </p>
+        <hr>
+        {% endfor %}
+    </div>
+</div>
+<!-- Pagination -->
+<nav class="d-flex justify-content-center">
+    <ul class="pagination">
+        {% if from_ > 0 %}
+        <li class="page-item">
+            <a href="javascript:history.back(1)" class="page-link">←</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <a href="javascript:history.back(1)" class="page-link">←</a>
+        </li>
+        {% endif %}
+        <li class="page-item">
+            <a class="page-link" style="background-color: white; color: black;">{{(from_ // size_) + 1}}</a>
+        </li>
+        {% if from_ + results|length < total %} <li class="page-item">
+            <a>
+                <form method="POST">
+                    <input type="hidden" name="query" value="{{ query }}">
+                    <input type="hidden" name="from_" value="{{ from_ + results|length }}">
+                    <button type="submit" class="page-link">→</button>
+                </form>
+            </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <a href="javascript:history.back(1)" class="page-link">→</a>
+            </li>
+            {% endif %}
+
+    </ul>
+</nav>
+</div>
+{% elif request.method == 'POST' %}
+
+<p>No results found.</p>
+
+{% endif %}
+{% endblock %}

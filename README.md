@@ -1,7 +1,6 @@
 <<<<<<< HEAD
 # Sentiment-and-intent-analysis-mental-health-engine
 =======
-# CZ4034-Information-Retrieval
 
 ### Project Overview.
 
@@ -104,9 +103,6 @@ To run the application using Flask, follow these steps:
 
 
 ## Classification
-
-### Subjective, Polarity, Emotion Classification
-1. Another README.md specifically for Subjective, Polarity, Emotion Classification code can be found in Subjective_Polarity_Emotion_Classification folder
 
 ### Rule based (SentiWordNet)
 We have to import some dependencies to run the sentiWordNet classification on the dataset
